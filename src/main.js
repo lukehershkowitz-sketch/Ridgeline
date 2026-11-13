@@ -158,6 +158,7 @@ const game = new (class {
       this.phys.spawnAt(0, 0),
       this.tricks._resetAir(),
       this.tricks.resetStance(),
+      this.tricks.snapVisual(),
       this.tank.reset(),
       (this.chase.initialised = !1),
       (this.fade = 0),
@@ -239,6 +240,7 @@ const game = new (class {
       (this.phys.grace = 1.5),
       this.tricks._resetAir(),
       this.tricks.resetStance(),
+      this.tricks.snapVisual(),
       (this.chase.initialised = !1),
       this.hud.clearAir(),
       this.setState(`riding`);
@@ -368,6 +370,7 @@ const game = new (class {
       this.state !== `crashed` && (this.fade = Math.max(0, this.fade - n * 3)),
       (this.flash = Math.max(0, this.flash - n * 1.5));
     let i = this._visState();
+    this.tricks.updateVisual(n);
     this.player.update(n, this.phys, this.tricks, i),
       this.state !== `crashed` && this.tricks.updateGround(this.phys.grounded ? n : 0),
       this._effects(n);
@@ -507,7 +510,7 @@ const game = new (class {
             return;
           }
           e.confirmLanding(n.impact),
-            this.chase.addShake(Math.min(1, n.impact / 12)),
+            this.chase.land(n.impact),
             this.audio.thump(n.impact),
             this.dust.burst(e.pos, Math.min(60, 8 + n.impact * 4), 1.2 + n.impact * 0.15);
         } else n.type === `crash` && this.state === `riding` && this.crash(n.reason);

@@ -1,8 +1,23 @@
 // Trick detection, combos and scoring.
+import { springStep } from './noise.js';
 
 const TAU = Math.PI * 2;
 
 const wrapAnglePi = (e) => Math.atan2(Math.sin(e), Math.cos(e));
+
+// Stiffness of the springs that the drawn bike follows. Lower = floatier.
+const VIS_YAW_OMEGA = 28;
+
+const VIS_FLIP_OMEGA = 26;
+
+const VIS_WHIP_OMEGA = 30;
+
+// Shift s.x by whole turns so it is within half a turn of target (targets get
+// re-based by multiples of 2*PI on landing).
+const wrapNear = (s, target) => {
+  const d = target - s.x;
+  Math.abs(d) > Math.PI && (s.x += TAU * Math.round(d / TAU));
+};
 
 const GRABS = {
   superman: {
@@ -31,6 +46,18 @@ const TrickSystem = class {
       (this.bestCombo = 1),
       (this.tricksLanded = 0),
       (this.listeners = []),
+      (this.vis = {
+        yaw: { x: 0, v: 0 },
+        flip: { x: 0, v: 0 },
+        whip: { x: 0, v: 0 },
+      }),
+      (this.whipPose = 0),
+      (this._snapVis = !0),
+      (this.pose = {
+        superman: 0,
+        nohander: 0,
+        cancan: 0,
+      }),
       this.resetStance(),
       this._resetAir();
   }
@@ -40,7 +67,49 @@ const TrickSystem = class {
   get isFakie() {
     return Math.abs(wrapAnglePi(this.stance)) > Math.PI / 2;
   }
+  // What is drawn: the logic angles below, followed through springs so spins,
+  // flips and whips ease in and out and landings settle instead of snapping.
   get visualYaw() {
+    return this.vis.yaw.x;
+  }
+  get visualYawVel() {
+    return this.vis.yaw.v;
+  }
+  get visualFlip() {
+    return this.vis.flip.x;
+  }
+  get visualFlipVel() {
+    return this.vis.flip.v;
+  }
+  get visualWhip() {
+    return this.vis.whip.x;
+  }
+  updateVisual(dt) {
+    const yaw = this.targetYaw,
+      flip = this.flip,
+      whip = (this.whipCount + (this.whipActive ? this.whip : 0)) * TAU,
+      v = this.vis;
+    if (this._snapVis) {
+      (this._snapVis = !1),
+        (v.yaw.x = yaw),
+        (v.flip.x = flip),
+        (v.whip.x = whip),
+        (v.yaw.v = v.flip.v = v.whip.v = 0),
+        (this.whipPose = 0);
+      return;
+    }
+    wrapNear(v.yaw, yaw), wrapNear(v.flip, flip), wrapNear(v.whip, whip);
+    springStep(v.yaw, yaw, VIS_YAW_OMEGA, dt),
+      springStep(v.flip, flip, VIS_FLIP_OMEGA, dt),
+      springStep(v.whip, whip, VIS_WHIP_OMEGA, dt),
+      (this.whipPose += (+this.whipActive - this.whipPose) * (1 - Math.exp(-dt * 11)));
+  }
+  // Drop any in-flight easing (respawn, restart).
+  snapVisual() {
+    this._snapVis = !0;
+    for (let e of Object.keys(this.pose)) this.pose[e] = 0;
+  }
+  get targetYaw() {
     if (this.butter) {
       let e = this.butter.t,
         t = e * e * (3 - 2 * e);
@@ -71,11 +140,6 @@ const TrickSystem = class {
       (this.whip = 0),
       (this.whipActive = !1),
       (this.whipCount = 0),
-      (this.pose = {
-        superman: 0,
-        nohander: 0,
-        cancan: 0,
-      }),
       (this.poseHold = {
         superman: 0,
         nohander: 0,
@@ -392,7 +456,8 @@ const TrickSystem = class {
       (this.bestCombo = 1),
       (this.tricksLanded = 0),
       this._resetAir(),
-      this.resetStance();
+      this.resetStance(),
+      this.snapVisual();
   }
 };
 

@@ -13,6 +13,14 @@ const AIR_DRAG = 0.0042;
 
 const MAX_PEDAL_SPEED = 15.5;
 
+// Suspension spring (omega = 14 rad/s, damping ratio 0.6). The landing kick is
+// scaled so peak compression matches the old instant value.
+const SUSP_STIFFNESS = 196;
+
+const SUSP_DAMPING = 16.8;
+
+const SUSP_LANDING_KICK = 28;
+
 const _physA = new Vector3();
 
 const _physB = new Vector3();
@@ -38,6 +46,7 @@ const BikePhysics = class {
       (this.grounded = !0),
       (this.airTime = 0),
       (this.compression = 0),
+      (this.compVel = 0),
       (this.slip = 0),
       (this.braking = !1),
       (this.pedalling = !1),
@@ -76,6 +85,7 @@ const BikePhysics = class {
       (this.lean = 0),
       (this.airTime = 0),
       (this.compression = 0),
+      (this.compVel = 0),
       (this.airPitchInput = 0),
       (this.pitch = Math.asin(clamp(this.forward.y, -1, 1))),
       (this.lastSafeZ = e),
@@ -113,7 +123,10 @@ const BikePhysics = class {
       if (
         (this.grace > 0 && (this.grace -= e),
         this.grounded ? this._stepGround(e, t) : this._stepAir(e, t),
-        (this.compression += (0 - this.compression) * Math.min(1, e * 5)),
+        // Suspension: under-damped spring, so a landing sinks in and rebounds
+        // instead of jumping to full compression in one step.
+        (this.compVel += (-SUSP_STIFFNESS * this.compression - SUSP_DAMPING * this.compVel) * e),
+        (this.compression = clamp(this.compression + this.compVel * e, -0.25, 1.1)),
         (this.wheelRate = this.grounded ? this.fwdSpeed / 0.37 : this.wheelRate * Math.exp(-e * 0.4)),
         (this.wheelAngle += this.wheelRate * e),
         this.pedalling && this.grounded)
@@ -271,7 +284,7 @@ const BikePhysics = class {
     (this.grounded = !0),
       this.vel.addScaledVector(this.normal, -this.vel.dot(this.normal)),
       this.vel.multiplyScalar(1 - Math.min(0.25, Math.max(0, e - 3) * 0.02)),
-      (this.compression = Math.min(1, e * 0.11)),
+      (this.compVel += Math.min(1, e * 0.11) * SUSP_LANDING_KICK),
       (this.pitch = Math.asin(clamp(this.forward.y, -1, 1))),
       (this.airPitchInput = 0),
       (this.fwdSpeed = this.vel.dot(this.forward));

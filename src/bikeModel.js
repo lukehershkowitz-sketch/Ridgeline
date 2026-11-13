@@ -22,6 +22,7 @@ import {
   Vector3,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { clamp, smoothstep, springStep } from './noise.js';
 
 const v3 = (e, t, n) => new Vector3(e, t, n);
 
@@ -271,6 +272,12 @@ const BikeRig = class {
       this._buildRider(),
       (this.visPitch = 0),
       (this.visRoll = 0),
+      (this.pitchSpring = { x: 0, v: 0 }),
+      (this.rollSpring = { x: 0, v: 0 }),
+      (this.sinceLand = 1),
+      (this.airBlend = 0),
+      (this.pedalBlend = 0),
+      (this.brakeBlend = 0),
       (this.crashSpin = new Vector3()),
       (this.crashT = 0),
       (this._v = {}),
@@ -471,6 +478,7 @@ const BikeRig = class {
   }
   update(e, t, n, r) {
     let i = this.root,
+      view = r,
       a = r.crashed && this.flatten,
       o = Math.min(1, e * (a ? 30 : 6));
     if (
@@ -488,18 +496,41 @@ const BikeRig = class {
       (this.crashT = 0), i.position.copy(t.pos);
       let r = this.tmp.a.set(-Math.cos(t.yaw), 0, Math.sin(t.yaw)),
         a = t.grounded ? Math.asin(Math.max(-1, Math.min(1, t.normal.dot(r)))) : 0,
-        o = Math.min(1, e * (t.grounded ? 14 : 8));
-      (this.visPitch += (t.pitch - this.visPitch) * o),
-        (this.visRoll += (a + t.lean - this.visRoll) * o),
+        pitchTarget = t.pitch;
+      this.sinceLand = t.grounded ? this.sinceLand + e : 0;
+      this.airBlend += (+!t.grounded - this.airBlend) * (1 - Math.exp(-e * 9));
+      // Coming down: start matching the slope of the landing before touchdown,
+      // unless a trick is still rotating the bike.
+      if (!t.grounded && t.vel.y < -0.5 && !n.isBusy) {
+        let x = t.pos.x,
+          z = t.pos.z,
+          fx = Math.sin(t.yaw) * 0.6,
+          fz = Math.cos(t.yaw) * 0.6,
+          timeToGround = (t.pos.y - view.groundAt(x, z)) / Math.max(1, -t.vel.y),
+          w = (1 - smoothstep(0.08, 0.4, timeToGround)) * 0.6;
+        if (w > 0) {
+          let slope = Math.atan2(view.groundAt(x + fx, z + fz) - view.groundAt(x - fx, z - fz), 1.2),
+            err = slope - t.pitch;
+          Math.abs(err) < 0.7 && (pitchTarget += err * w);
+        }
+      }
+      // Loose in the air and just after touchdown, tightening up over 0.35 s so
+      // the bike eases onto the ground and then tracks the terrain closely.
+      let o = 16 + 14 * smoothstep(0, 0.35, this.sinceLand);
+      (this.pitchSpring.x = this.visPitch), (this.rollSpring.x = this.visRoll);
+      (this.visPitch = springStep(this.pitchSpring, pitchTarget, o, e)),
+        (this.visRoll = springStep(this.rollSpring, a + t.lean, o, e)),
         i.rotation.set(-this.visPitch, t.yaw, this.visRoll);
       let s = n.visualYaw,
-        c = n.flip,
-        l = null;
+        c = n.visualFlip,
+        l = null,
+        // Bank the bike into a spin.
+        spinTilt = clamp(-n.visualYawVel * 0.02, -0.22, 0.22) * this.airBlend;
       t.grounded &&
         (n.butter
-          ? ((c = n.butterPitch), (l = BIKE_POINTS.frontAxle.z))
-          : n.wheelie > 0.002 && ((c = -n.wheelie), (l = BIKE_POINTS.rearAxle.z))),
-        this.trick.rotation.set(c, s, 0);
+          ? ((c += n.butterPitch), (l = BIKE_POINTS.frontAxle.z))
+          : n.wheelie > 0.002 && ((c -= n.wheelie), (l = BIKE_POINTS.rearAxle.z))),
+        this.trick.rotation.set(c, s, spinTilt);
       let u = this.tmp.b.set(0, TRICK_PIVOT_HEIGHT, 0);
       if (l === null) this.trick.position.copy(u);
       else {
@@ -514,7 +545,7 @@ const BikeRig = class {
     }
     let s = r.crashed ? Math.sin(r.time * 9) * 0.6 : (t.steer * 0.42) / (1 + t.speed * 0.12);
     this.front.quaternion.setFromAxisAngle(STEER_AXIS, -s),
-      this.whip.quaternion.setFromAxisAngle(STEER_AXIS, n.whipActive ? n.whip * Math.PI * 2 : 0);
+      this.whip.quaternion.setFromAxisAngle(STEER_AXIS, n.visualWhip);
     let c = Math.cos(n.visualYaw) < 0 ? -1 : 1;
     (this.frontWheel.rotation.x = t.wheelAngle * c), (this.rearWheel.rotation.x = t.wheelAngle * c);
     let l = Math.min(0.6, Math.abs(t.wheelRate) / 50);
@@ -551,13 +582,26 @@ const BikeRig = class {
       s = [this._local(this.pedals[0], new Vector3()), this._local(this.pedals[1], new Vector3())],
       c = this._local(this.saddle, new Vector3()),
       l = t.pedalling && t.speed < 9 && t.grounded,
-      u = l ? v3(0, 1, -0.27) : v3(0, 1.08, -0.21),
-      d = l ? v3(0, 1.42, 0) : v3(0, 1.42, 0.07);
+      poseK = 1 - Math.exp(-e * 10);
+    // Ease between riding stances instead of switching in one frame.
+    (this.pedalBlend += (+!!l - this.pedalBlend) * poseK),
+      (this.brakeBlend += (+!!t.braking - this.brakeBlend) * poseK);
+    let pb = this.pedalBlend,
+      bb = this.brakeBlend,
+      // Tuck while flipping, look into a spin.
+      tuck = Math.min(1, Math.abs(n.visualFlipVel) / 6) * this.airBlend,
+      spinLook = clamp(n.visualYawVel * 0.05, -0.5, 0.5) * this.airBlend,
+      u = v3(0, 1.08, -0.21).lerp(v3(0, 1, -0.27), pb),
+      d = v3(0, 1.42, 0.07).lerp(v3(0, 1.42, 0), pb);
     (u.y -= a * 0.24),
       (d.y -= a * 0.2),
       (d.z += a * 0.05),
-      t.braking && ((u.z -= 0.09), (d.z -= 0.06), (u.y -= 0.03)),
-      t.grounded || (u.y += 0.04),
+      (u.z -= 0.09 * bb),
+      (d.z -= 0.06 * bb),
+      (u.y -= 0.03 * bb),
+      (u.y += 0.04 * this.airBlend - 0.05 * tuck),
+      (d.y -= 0.09 * tuck),
+      (d.z += 0.04 * tuck),
       (u.x += t.lean * 0.1),
       (d.x += t.lean * 0.16),
       t.pedalling && ((d.x += Math.sin(t.crankAngle) * 0.025), (u.x += Math.sin(t.crankAngle) * 0.015));
@@ -583,9 +627,9 @@ const BikeRig = class {
         f[0].lerp(v3(-0.72, 1.72, -0.05), _),
         f[1].lerp(v3(0.72, 1.72, -0.05), _)),
       v > 0.001 && (p[1].lerp(v3(-0.38, 0.9, 0.32), v), u.lerp(v3(-0.04, 1.12, -0.24), v)),
-      n.whipActive || n.whip > 0)
+      n.whipPose > 0.001)
     ) {
-      let e = Math.sin(Math.min(1, n.whip) * Math.PI) * 0.5 + (n.whipActive ? 0.5 : 0);
+      let e = n.whipPose;
       p[0].lerp(v3(-0.34, 0.78, -0.12), e),
         p[1].lerp(v3(0.34, 0.78, -0.12), e),
         u.lerp(v3(0, 1.16, -0.12), e);
@@ -613,7 +657,7 @@ const BikeRig = class {
       this.head.position.copy(O),
       this.head.rotation.set(
         0.25 - a * 0.15 + (r.crashed ? Math.sin(i * 8) * 0.5 : 0),
-        -t.steer * 0.15,
+        -t.steer * 0.15 + spinLook,
         -t.lean * 0.4,
       );
     let k = this.limbs,

@@ -121,4 +121,14 @@ const smoothstep = (e, t, n) => {
 
 const clamp = (e, t, n) => (e < t ? t : e > n ? n : e);
 
-export { makeValueNoise, mulberry32, SimplexNoise, smoothstep, clamp };
+// Critically damped spring, exact step. `s` is { x, v }; moves s.x toward `target`
+// with no overshoot. `omega` is stiffness (settle time is roughly 4 / omega).
+function springStep(s, target, omega, dt) {
+  const d = s.x - target,
+    decay = Math.exp(-omega * dt),
+    tmp = (s.v + omega * d) * dt;
+  (s.x = target + (d + tmp) * decay), (s.v = (s.v - omega * tmp) * decay);
+  return s.x;
+}
+
+export { makeValueNoise, mulberry32, SimplexNoise, smoothstep, clamp, springStep };
