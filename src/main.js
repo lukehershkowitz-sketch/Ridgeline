@@ -10,7 +10,7 @@ import { Terrain } from './terrain.js';
 import { TrailFeatures } from './features.js';
 import { BikePhysics } from './physics.js';
 import { TrickSystem } from './tricks.js';
-import { BikeRig } from './bikeModel.js';
+import { BikeRig, loadBikeModel } from './bikeModel.js';
 import { ChaseCamera } from './camera.js';
 import { AmbientMotes, DustParticles } from './particles.js';
 import { PostFX } from './postfx.js';
@@ -70,6 +70,8 @@ const game = new (class {
       await t(0.5, `Building wooden features…`, () => {
         this.props = new TrailFeatures(this.scene);
       }),
+      this.hud.setLoading(0.53, `Building the bike…`),
+      await loadBikeModel(),
       (this.phys = new BikePhysics()),
       this.phys.spawnAt(0, 0),
       (this.tricks = new TrickSystem()),

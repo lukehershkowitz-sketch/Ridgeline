@@ -22,6 +22,8 @@ import {
   Vector3,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { CONFIG } from './config.js';
 import { clamp, smoothstep, springStep } from './noise.js';
 
@@ -41,6 +43,32 @@ const BIKE_POINTS = {
 const STEER_AXIS = new Vector3().subVectors(BIKE_POINTS.htBot, BIKE_POINTS.htTop).normalize();
 
 const TRICK_PIVOT_HEIGHT = 0.85;
+
+// The bike mesh (public/models/bike.glb). It is split into the parts the rig
+// moves (frame, front, wheelF, wheelR, crank, pedalL, pedalR) and carries empty
+// marker nodes for the pivots and rider contact points. If it fails to load the
+// rig falls back to the built-in procedural bike.
+let bikeAsset = null;
+
+async function loadBikeModel() {
+  try {
+    const gltf = await new GLTFLoader()
+      .setMeshoptDecoder(MeshoptDecoder)
+      .loadAsync(`${import.meta.env.BASE_URL}models/bike.glb`);
+    gltf.scene.updateMatrixWorld(!0);
+    const at = (name, out) => gltf.scene.getObjectByName(name).getWorldPosition(out);
+    at(`axleRear`, BIKE_POINTS.rearAxle),
+      at(`axleFront`, BIKE_POINTS.frontAxle),
+      at(`bb`, BIKE_POINTS.bb),
+      at(`saddle`, BIKE_POINTS.seatTop),
+      at(`steerTop`, BIKE_POINTS.htTop),
+      at(`steerBot`, BIKE_POINTS.htBot),
+      STEER_AXIS.subVectors(BIKE_POINTS.htBot, BIKE_POINTS.htTop).normalize(),
+      (bikeAsset = gltf.scene);
+  } catch (e) {
+    console.warn(`Bike model failed to load, using the built-in bike.`, e);
+  }
+}
 
 const MATERIALS = {
   paint: new MeshPhysicalMaterial({
@@ -140,6 +168,30 @@ const MATERIALS = {
     color: `#9ba0a6`,
     transparent: !0,
     opacity: 0.75,
+  }),
+  bikePaint: new MeshPhysicalMaterial({
+    color: `#1857c9`,
+    metalness: 0.4,
+    roughness: 0.3,
+    clearcoat: 1,
+    clearcoatRoughness: 0.1,
+  }),
+  darkMetal: new MeshStandardMaterial({
+    color: `#3b3d42`,
+    metalness: 0.9,
+    roughness: 0.42,
+  }),
+  white: new MeshStandardMaterial({
+    color: `#e9e7e1`,
+    roughness: 0.5,
+  }),
+  amber: new MeshStandardMaterial({
+    color: `#f6a21a`,
+    roughness: 0.35,
+  }),
+  red: new MeshStandardMaterial({
+    color: `#c8281e`,
+    roughness: 0.35,
   }),
   blur: new MeshBasicMaterial({
     color: `#2a2b2d`,
@@ -269,7 +321,7 @@ const BikeRig = class {
       this.root.add(this.trick),
       this.trick.add(this.content),
       e.add(this.root),
-      this._buildBike(),
+      bikeAsset ? this._buildBikeFromModel(bikeAsset) : this._buildBike(),
       this._buildRider(),
       (this.visPitch = 0),
       (this.visRoll = 0),
@@ -287,6 +339,72 @@ const BikeRig = class {
         b: new Vector3(),
         c: new Vector3(),
       });
+  }
+  _buildBikeFromModel(model) {
+    const P = BIKE_POINTS,
+      byName = {
+        paint: MATERIALS.bikePaint,
+        black: MATERIALS.black,
+        rubber: MATERIALS.rubber,
+        silver: MATERIALS.silver,
+        darkMetal: MATERIALS.darkMetal,
+        saddle: MATERIALS.saddle,
+        white: MATERIALS.white,
+        amber: MATERIALS.amber,
+        red: MATERIALS.red,
+      };
+    model.traverse((o) => {
+      o.isMesh && ((o.material = byName[o.material.name] || MATERIALS.black), (o.castShadow = o.receiveShadow = !0));
+    });
+    const markerPos = (name) => model.getObjectByName(name).getWorldPosition(new Vector3()),
+      // A group at `pivot` holding the named part exactly where the model has it.
+      part = (name, pivot) => {
+        const g = new Group();
+        return g.position.copy(pivot), model.add(g), g.attach(model.getObjectByName(name)), g;
+      },
+      // Move `child` (positioned in bike space) under `parent` (also in bike space).
+      nest = (parent, child) => (child.position.sub(parent.position), parent.add(child), child),
+      wheel = (name, axle) => {
+        const g = part(name, axle),
+          blur = new Mesh(new RingGeometry(0.04, 0.3, 40).rotateY(Math.PI / 2), MATERIALS.blur.clone());
+        return g.add(blur), (g.userData.blur = blur), g;
+      };
+    // Steering assembly: fork, bars, front brake, front wheel.
+    (this.front = part(`front`, P.htTop)), this.content.add(this.front);
+    (this.frontWheel = nest(this.front, wheel(`wheelF`, P.frontAxle))),
+      // index 0 is the rider's right (-x), matching the rider rig
+      (this.grips = [`gripR`, `gripL`].map((name) => {
+        const o = new Object3D();
+        return o.position.copy(markerPos(name)), nest(this.front, o);
+      }));
+    // Everything a tailwhip swings around the steerer: frame, rear wheel, drivetrain.
+    (this.whip = new Group()), this.whip.position.copy(P.htTop), this.content.add(this.whip);
+    const body = new Group();
+    body.position.copy(P.htTop).negate(), this.whip.add(body), body.add(part(`frame`, v3(0, 0, 0)));
+    (this.rearWheel = wheel(`wheelR`, P.rearAxle)), body.add(this.rearWheel);
+    (this.saddle = new Object3D()), this.saddle.position.copy(P.seatTop), body.add(this.saddle);
+    // The model's cranks sit at an angle; turn them so crank angle 0 is level,
+    // right pedal forward, which is what the pedalling animation expects.
+    const bb = v3(0, P.bb.y, P.bb.z),
+      right = markerPos(`pedalRPivot`).sub(bb),
+      level = Math.atan2(right.y, right.z),
+      xAxis = v3(1, 0, 0);
+    (this.crank = new Group()), this.crank.position.copy(bb), body.add(this.crank);
+    const arms = part(`crank`, bb);
+    arms.position.set(0, 0, 0), (arms.rotation.x = level), this.crank.add(arms);
+    this.pedals = [`pedalR`, `pedalL`].map((name) => {
+      const pivot = markerPos(`${name}Pivot`),
+        mesh = part(name, pivot),
+        holder = new Group();
+      return (
+        holder.position.copy(pivot).sub(bb).applyAxisAngle(xAxis, level),
+        mesh.position.set(0, 0, 0),
+        (mesh.rotation.x = level),
+        holder.add(mesh),
+        this.crank.add(holder),
+        holder
+      );
+    });
   }
   _buildBike() {
     (this.front = new Group()), this.front.position.copy(BIKE_POINTS.htTop), this.content.add(this.front);
@@ -695,4 +813,4 @@ const BikeRig = class {
   }
 };
 
-export { BikeRig };
+export { BikeRig, loadBikeModel };

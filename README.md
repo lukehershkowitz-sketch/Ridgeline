@@ -25,7 +25,7 @@ npm run build      # static output in dist/
 | `features.js` | Wooden jumps, start/finish gates, trail markers |
 | `physics.js` | `BikePhysics`: ground contact, air, landings, crashes |
 | `tricks.js` | `TrickSystem`: trick detection, combos, scoring |
-| `bikeModel.js` | Bike and rider meshes plus the pose rig (`BikeRig`) |
+| `bikeModel.js` | Loads the bike model, builds the rider, and holds the pose rig (`BikeRig`) |
 | `camera.js` | Chase camera |
 | `environment.js` | Sky, sun, fog, lighting |
 | `textures.js` | Procedurally painted canvas textures |
@@ -34,6 +34,19 @@ npm run build      # static output in dist/
 | `postfx.js` | Bloom, speed effect, output pass |
 | `hud.js` / `input.js` / `audio.js` | DOM HUD, keyboard, synthesized WebAudio |
 | `tank.js` | The tank (press T) |
+
+## Bike model
+
+The bike is `public/models/bike.glb` (about 49k triangles, 0.5 MB, meshopt-compressed, no textures). It is split into the parts the rig moves (`frame`, `front`, `wheelF`, `wheelR`, `crank`, `pedalL`, `pedalR`) and has empty marker nodes for pivots and rider contact points (`steerTop`, `steerBot`, `axleFront`, `axleRear`, `bb`, `saddle`, `gripL`, `gripR`, `pedalLPivot`, `pedalRPivot`). Colours are assigned in `bikeModel.js` by material name. If the file fails to load, the game falls back to the older procedural bike.
+
+It was converted from the Stark Temper MTB Blender files with `tools/export_bike.py` (needs Blender's `bpy` Python module), then compressed:
+
+```bash
+python tools/export_bike.py path/to/blend/main.blend bike_raw.glb
+npx @gltf-transform/cli meshopt bike_raw.glb public/models/bike.glb
+```
+
+The script scales the bike to the game's wheel size, lowers the seat post, replaces the per-link chain with a simple band, and drops cables and very small parts.
 
 ## Provenance
 
