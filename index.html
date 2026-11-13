@@ -1,0 +1,802 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        box-sizing: border-box;
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+      html {
+        scroll-padding-top: env(safe-area-inset-top, 0px);
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        font:
+          14px -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+        background: #fff;
+        color: #000;
+      }
+      img {
+        max-width: 100%;
+      }
+      [hidden]:not([hidden="until-found" i]) {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <title>RIDGELINE</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap"
+    />
+    <style>
+      :root {
+        --ink: #fff7ec;
+        --dim: #fff4e49e;
+        --accent: #ff8a3d;
+        --accent2: #3fd1c6;
+        --panel: #120e0a52;
+        --display: "Barlow Condensed", "Arial Narrow", "Segoe UI", system-ui,
+          sans-serif;
+        --body: "Inter", "Segoe UI", system-ui, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        color: var(--ink);
+        font-family: var(--body);
+        -webkit-user-select: none;
+        user-select: none;
+        background: #1a140f;
+        margin: 0;
+        overflow: hidden;
+      }
+      #game {
+        outline: none;
+        width: 100%;
+        height: 100%;
+        display: block;
+        position: fixed;
+        inset: 0;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .dim {
+        color: var(--dim);
+      }
+      #hud {
+        pointer-events: none;
+        position: fixed;
+        inset: 0;
+      }
+      .panel {
+        -webkit-backdrop-filter: blur(6px);
+        text-shadow: 0 1px 8px #00000059;
+        background: linear-gradient(160deg, #1e160e6b, #0a08062e);
+        border: 1px solid #ffebd21f;
+        border-radius: 14px;
+        padding: 14px 18px;
+        position: absolute;
+      }
+      .top-left {
+        min-width: 200px;
+        top: 22px;
+        left: 22px;
+      }
+      .top-right {
+        text-align: right;
+        min-width: 220px;
+        top: 22px;
+        right: 22px;
+      }
+      .label {
+        font-family: var(--display);
+        letter-spacing: 0.18em;
+        color: var(--dim);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .big-num {
+        font-family: var(--display);
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.01em;
+        font-size: 44px;
+        font-weight: 800;
+        line-height: 1;
+      }
+      .big-num.small {
+        font-size: 36px;
+      }
+      .combo {
+        align-items: center;
+        gap: 10px;
+        margin-top: 8px;
+        display: flex;
+      }
+      .mult {
+        font-family: var(--display);
+        background: #ffffff1a;
+        border-radius: 8px;
+        padding: 2px 10px;
+        font-size: 22px;
+        font-weight: 800;
+        transition:
+          transform 0.15s,
+          background 0.2s,
+          color 0.2s;
+      }
+      .mult.hot {
+        background: var(--accent);
+        color: #2a1206;
+      }
+      .mult.bump {
+        transform: scale(1.35);
+      }
+      .combo-bar {
+        background: #ffffff1f;
+        border-radius: 3px;
+        flex: 1;
+        height: 5px;
+        overflow: hidden;
+      }
+      #combo-fill {
+        background: linear-gradient(90deg, var(--accent), #ffd27a);
+        width: 0%;
+        height: 100%;
+      }
+      .progress {
+        background: #ffffff24;
+        border-radius: 3px;
+        height: 6px;
+        margin: 10px 0 6px;
+        position: relative;
+      }
+      #progress-fill {
+        background: linear-gradient(90deg, var(--accent2), #b7fff6);
+        border-radius: 3px;
+        width: 0%;
+        position: absolute;
+        inset: 0 auto 0 0;
+      }
+      #progress-dot {
+        width: 14px;
+        height: 14px;
+        box-shadow: 0 0 10px var(--accent2);
+        background: #fff;
+        border-radius: 50%;
+        position: absolute;
+        top: -4px;
+        left: 0%;
+        transform: translate(-50%);
+      }
+      .speedo {
+        text-align: center;
+        width: 230px;
+        position: absolute;
+        bottom: 26px;
+        left: 50%;
+        transform: translate(-50%);
+      }
+      .gauge {
+        width: 230px;
+        height: 138px;
+        overflow: visible;
+      }
+      .gauge path {
+        fill: none;
+        stroke-width: 10px;
+        stroke-linecap: round;
+      }
+      .gauge .track {
+        stroke: #ffffff24;
+      }
+      .gauge .fill {
+        stroke: var(--accent);
+        stroke-dasharray: 252;
+        stroke-dashoffset: 252px;
+        filter: drop-shadow(0 0 6px #ff8a3dcc);
+        transition: stroke 0.3s;
+      }
+      .speed-read {
+        font-family: var(--display);
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 2px 16px #00000073;
+        font-size: 56px;
+        font-weight: 800;
+        line-height: 1;
+        position: absolute;
+        bottom: 8px;
+        left: 0;
+        right: 0;
+      }
+      .speed-read small {
+        letter-spacing: 0.25em;
+        color: var(--dim);
+        margin-top: 2px;
+        font-size: 13px;
+        font-weight: 600;
+        display: block;
+      }
+      .air {
+        font-family: var(--display);
+        letter-spacing: 0.3em;
+        color: var(--accent2);
+        opacity: 0;
+        font-size: 14px;
+        font-weight: 700;
+        transition: opacity 0.15s;
+        position: absolute;
+        top: -8px;
+        left: 50%;
+        transform: translate(-50%);
+      }
+      .air.on {
+        opacity: 1;
+      }
+      #trick-feed {
+        text-align: center;
+        width: 80vw;
+        position: absolute;
+        top: 20%;
+        left: 50%;
+        transform: translate(-50%);
+      }
+      #air-tricks {
+        font-family: var(--display);
+        letter-spacing: 0.04em;
+        text-shadow: 0 3px 18px #00000080;
+        min-height: 42px;
+        font-size: 34px;
+        font-weight: 800;
+      }
+      #air-tricks .t {
+        margin: 0 8px;
+        animation: 0.25s ease-out pop;
+        display: inline-block;
+      }
+      #air-tricks .plus {
+        color: var(--accent);
+      }
+      #popups {
+        height: 160px;
+        position: relative;
+      }
+      .popup {
+        font-family: var(--display);
+        animation: 2.2s ease-out forwards rise;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+      }
+      .popup .grade {
+        letter-spacing: 0.06em;
+        font-size: 54px;
+        font-weight: 800;
+        line-height: 1;
+      }
+      .popup .grade.PERFECT {
+        color: #ffd76a;
+        text-shadow: 0 0 24px #ffbe46b3;
+      }
+      .popup .grade.CLEAN {
+        color: #b6fff4;
+        text-shadow: 0 0 20px #3fd1c699;
+      }
+      .popup .grade.SKETCHY {
+        color: #ffb08a;
+      }
+      .popup .grade.BAIL {
+        color: #ff5a3c;
+        text-shadow: 0 0 24px #ff3c1eb3;
+      }
+      .popup .pts {
+        color: var(--ink);
+        font-size: 28px;
+        font-weight: 700;
+      }
+      .popup .names {
+        color: var(--dim);
+        letter-spacing: 0.08em;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      @keyframes pop {
+        0% {
+          opacity: 0;
+          transform: scale(1.6);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+      @keyframes rise {
+        0% {
+          opacity: 0;
+          transform: translateY(16px) scale(0.85);
+        }
+        10% {
+          opacity: 1;
+          transform: translateY(0) scale(1.05);
+        }
+        18% {
+          transform: scale(1);
+        }
+        75% {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
+          transform: translateY(-40px);
+        }
+      }
+      #toast {
+        font-family: var(--display);
+        letter-spacing: 0.12em;
+        opacity: 0;
+        text-shadow: 0 2px 14px #0009;
+        font-size: 26px;
+        font-weight: 800;
+        transition: opacity 0.3s;
+        position: absolute;
+        top: 44%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+      #toast.on {
+        opacity: 1;
+      }
+      .help {
+        max-width: 330px;
+        font-size: 12.5px;
+        line-height: 1.75;
+        bottom: 22px;
+        left: 22px;
+      }
+      .help-title {
+        font-family: var(--display);
+        letter-spacing: 0.2em;
+        margin-bottom: 4px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .help.collapsed .help-body {
+        display: none;
+      }
+      .help .sep {
+        font-family: var(--display);
+        letter-spacing: 0.2em;
+        color: var(--accent);
+        margin-top: 6px;
+        font-size: 11px;
+      }
+      kbd {
+        min-width: 20px;
+        font-family: var(--body);
+        text-align: center;
+        color: #22170d;
+        background: linear-gradient(#fff6e8, #e3d2bb);
+        border-radius: 5px;
+        margin: 0 2px;
+        padding: 0 6px;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 19px;
+        display: inline-block;
+        box-shadow: 0 2px #00000059;
+      }
+      #fps {
+        font-variant-numeric: tabular-nums;
+        font-size: 11px;
+        position: absolute;
+        bottom: 18px;
+        right: 24px;
+      }
+      .overlay {
+        text-align: center;
+        background: radial-gradient(at 50% 60%, #140c060d, #0c080599 80%);
+        justify-content: center;
+        align-items: center;
+        display: flex;
+        position: fixed;
+        inset: 0;
+      }
+      #finish {
+        cursor: pointer;
+      }
+      #title {
+        background: radial-gradient(at 50% 55%, #140c0600, #0e0905a6 85%);
+      }
+      .title-inner {
+        max-width: 760px;
+        padding: 24px;
+      }
+      .kicker {
+        font-family: var(--display);
+        letter-spacing: 0.5em;
+        color: var(--accent);
+        font-size: 15px;
+        font-weight: 600;
+      }
+      h1 {
+        font-family: var(--display);
+        letter-spacing: 0.04em;
+        background: linear-gradient(#fff8ee 30%, #ffc98f 100%);
+        color: #0000;
+        filter: drop-shadow(0 8px 30px #00000073);
+        -webkit-background-clip: text;
+        background-clip: text;
+        margin: 10px 0 14px;
+        font-size: clamp(64px, 12vw, 148px);
+        font-weight: 800;
+        line-height: 0.9;
+      }
+      h1.smaller {
+        font-size: clamp(54px, 9vw, 110px);
+      }
+      .tag {
+        color: var(--dim);
+        max-width: 520px;
+        margin: 0 auto 30px;
+        font-size: 16px;
+        line-height: 1.55;
+      }
+      .load-bar {
+        background: #ffffff26;
+        border-radius: 2px;
+        width: 320px;
+        height: 4px;
+        margin: 0 auto 10px;
+        overflow: hidden;
+      }
+      #load-fill {
+        background: linear-gradient(90deg, var(--accent), #ffd27a);
+        width: 0%;
+        height: 100%;
+        transition: width 0.2s;
+      }
+      #load-text {
+        letter-spacing: 0.05em;
+        font-size: 13px;
+      }
+      .press {
+        font-family: var(--display);
+        letter-spacing: 0.18em;
+        margin-top: 10px;
+        font-size: 22px;
+        font-weight: 700;
+        animation: 1.8s ease-in-out infinite breathe;
+      }
+      .press kbd {
+        padding: 0 10px;
+        font-size: 14px;
+        line-height: 24px;
+      }
+      @keyframes breathe {
+        50% {
+          opacity: 0.55;
+        }
+      }
+      .mini-controls {
+        color: var(--dim);
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px 18px;
+        margin-top: 22px;
+        font-size: 13px;
+        display: flex;
+      }
+      .stats {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px 40px;
+        margin: 18px 0;
+        display: grid;
+      }
+      .stats .big-num {
+        font-size: 40px;
+      }
+      #f-best {
+        margin-bottom: 16px;
+        font-size: 14px;
+      }
+      #countdown {
+        font-family: var(--display);
+        text-shadow: 0 6px 40px #00000080;
+        pointer-events: none;
+        font-size: 140px;
+        font-weight: 800;
+        position: fixed;
+        top: 38%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+      #countdown.go {
+        color: var(--accent);
+      }
+      @media (max-width: 760px) {
+        .help {
+          display: none;
+        }
+        .big-num {
+          font-size: 32px;
+        }
+        .top-left,
+        .top-right {
+          min-width: 0;
+        }
+      }
+      .map-label {
+        font-family: var(--display);
+        letter-spacing: 0.32em;
+        color: var(--dim);
+        margin-bottom: 12px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .maps {
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 14px;
+        max-width: 700px;
+        margin: 0 auto 18px;
+        display: grid;
+      }
+      .map-card {
+        appearance: none;
+        cursor: pointer;
+        text-align: left;
+        color: var(--ink);
+        font: inherit;
+        -webkit-backdrop-filter: blur(6px);
+        background: linear-gradient(160deg, #241a109e, #0c09066b);
+        border: 1px solid #ffebd229;
+        border-radius: 14px;
+        padding: 16px 18px 15px;
+        transition:
+          transform 0.15s,
+          border-color 0.15s,
+          box-shadow 0.15s;
+      }
+      .map-card:hover {
+        border-color: #ffc89673;
+        transform: translateY(-2px);
+      }
+      .map-card.selected {
+        border-color: var(--accent);
+        box-shadow:
+          0 0 0 1px var(--accent),
+          0 10px 30px #ff78282e;
+      }
+      .map-card .mk {
+        font-family: var(--display);
+        letter-spacing: 0.24em;
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .map-card .mn {
+        font-family: var(--display);
+        letter-spacing: 0.02em;
+        margin: 4px 0 6px;
+        font-size: 28px;
+        font-weight: 800;
+        line-height: 1.05;
+      }
+      .map-card .mb {
+        color: var(--dim);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .map-card .ms {
+        font-family: var(--display);
+        letter-spacing: 0.14em;
+        margin-top: 10px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .map-card .ms span + span:before {
+        content: " · ";
+        color: var(--dim);
+      }
+      .map-hint {
+        margin-top: 8px;
+        font-size: 12px;
+      }
+      @media (max-width: 560px) {
+        .tag {
+          display: none;
+        }
+        .map-card .mn {
+          font-size: 22px;
+        }
+      }
+    </style>
+    <canvas id="game"></canvas>
+
+    <div id="hud" class="hidden">
+      <div class="panel top-left">
+        <div class="label">SCORE</div>
+        <div id="score" class="big-num">0</div>
+        <div class="combo">
+          <span id="mult" class="mult">×1</span>
+          <div class="combo-bar"><div id="combo-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="panel top-right">
+        <div class="label">TIME</div>
+        <div id="timer" class="big-num small">0:00.0</div>
+        <div class="progress">
+          <div id="progress-fill"></div>
+          <div id="progress-dot"></div>
+        </div>
+        <div id="distance" class="label dim">2.6 KM TO FINISH</div>
+      </div>
+
+      <div id="trick-feed">
+        <div id="air-tricks"></div>
+        <div id="popups"></div>
+      </div>
+
+      <div id="toast"></div>
+
+      <div class="speedo">
+        <svg viewBox="0 0 200 120" class="gauge">
+          <path class="track" d="M 20 110 A 80 80 0 0 1 180 110" />
+          <path
+            id="gauge-fill"
+            class="fill"
+            d="M 20 110 A 80 80 0 0 1 180 110"
+          />
+        </svg>
+        <div class="speed-read">
+          <span id="speed">0</span><small>KM/H</small>
+        </div>
+        <div id="air-indicator" class="air">AIR</div>
+      </div>
+
+      <div id="help" class="panel help">
+        <div class="help-title">CONTROLS <span class="dim">[H]</span></div>
+        <div class="help-body">
+          <div><kbd>W</kbd><kbd>↑</kbd> Pedal</div>
+          <div><kbd>S</kbd><kbd>↓</kbd> Brake / reverse</div>
+          <div><kbd>A</kbd><kbd>D</kbd> Steer &amp; carve</div>
+          <div><kbd>Space</kbd> Bunny hop / pop lips</div>
+          <div>
+            <kbd>V</kbd> (hold) Wheelie · <kbd>W</kbd>/<kbd>S</kbd> balance
+          </div>
+          <div><kbd>B</kbd> Nose butter 180 (fakie → forward)</div>
+          <div class="sep">IN THE AIR</div>
+          <div>
+            <kbd>A</kbd>/<kbd>D</kbd> Spin 180/360… (hold for more, works off
+            hops)
+          </div>
+          <div class="dim">
+            Land forward, fakie or a bit sideways and ride away
+          </div>
+          <div>
+            <kbd>Shift</kbd>+<kbd>S</kbd> Backflip · <kbd>Shift</kbd>+<kbd
+              >W</kbd
+            >
+            Frontflip
+          </div>
+          <div><kbd>Q</kbd> Tailwhip</div>
+          <div><kbd>E</kbd> Superman Seat Grab</div>
+          <div><kbd>F</kbd> No-Hander · <kbd>C</kbd> Can-Can</div>
+          <div><kbd>W</kbd>/<kbd>S</kbd> Pitch to match landing</div>
+          <div class="sep">OTHER</div>
+          <div>
+            <kbd>R</kbd> Respawn · <kbd>P</kbd> Pause · <kbd>M</kbd> Mute
+          </div>
+          <div><kbd>T</kbd> Call in a tank (it will run you over)</div>
+          <div><kbd>Esc</kbd> Home / change map</div>
+        </div>
+      </div>
+      <div id="fps" class="dim"></div>
+    </div>
+
+    <div id="title" class="overlay">
+      <div class="title-inner">
+        <div class="kicker">MOUNTAIN · BIKE · FREERIDE</div>
+        <h1>RIDGELINE</h1>
+        <p class="tag">
+          Golden-hour trails and big wooden jumps. Land clean, build your combo,
+          beat the clock.
+        </p>
+        <div id="loading">
+          <div class="load-bar"><div id="load-fill"></div></div>
+          <div id="load-text" class="dim">Generating mountain…</div>
+        </div>
+        <div id="start-prompt" class="hidden">
+          <div class="map-label">CHOOSE YOUR MAP</div>
+          <div id="maps" class="maps"></div>
+          <div class="press">
+            Click a map or press <kbd>ENTER</kbd> to drop in
+          </div>
+          <div class="dim map-hint">
+            <kbd>←</kbd><kbd>→</kbd> choose map · <kbd>Esc</kbd> while riding
+            returns here
+          </div>
+          <div class="mini-controls">
+            <span><kbd>W</kbd> pedal</span><span><kbd>S</kbd> brake</span
+            ><span><kbd>A</kbd><kbd>D</kbd> steer</span
+            ><span><kbd>Space</kbd> hop</span>
+            <span><kbd>A</kbd><kbd>D</kbd> in air: spin</span
+            ><span><kbd>V</kbd> wheelie</span
+            ><span><kbd>B</kbd> nose butter</span><span><kbd>T</kbd> tank</span
+            ><span><kbd>Shift</kbd>+<kbd>W</kbd>/<kbd>S</kbd> flip</span
+            ><span
+              ><kbd>Q</kbd><kbd>E</kbd><kbd>F</kbd><kbd>C</kbd> tricks</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="countdown" class="hidden"></div>
+
+    <div id="finish" class="overlay hidden">
+      <div class="title-inner">
+        <div class="kicker">RUN COMPLETE</div>
+        <h1 class="smaller">FINISH</h1>
+        <div class="stats">
+          <div>
+            <div class="label">TIME</div>
+            <div id="f-time" class="big-num">0:00.0</div>
+          </div>
+          <div>
+            <div class="label">SCORE</div>
+            <div id="f-score" class="big-num">0</div>
+          </div>
+          <div>
+            <div class="label">BEST COMBO</div>
+            <div id="f-combo" class="big-num">×1</div>
+          </div>
+          <div>
+            <div class="label">TRICKS</div>
+            <div id="f-tricks" class="big-num">0</div>
+          </div>
+          <div>
+            <div class="label">BAILS</div>
+            <div id="f-crashes" class="big-num">0</div>
+          </div>
+          <div>
+            <div class="label">TOP SPEED</div>
+            <div id="f-top" class="big-num">0</div>
+          </div>
+        </div>
+        <div id="f-best" class="dim"></div>
+        <div class="press">
+          Click or press <kbd>ENTER</kbd> to ride again · <kbd>Esc</kbd> change
+          map
+        </div>
+      </div>
+    </div>
+
+    <div id="pause" class="overlay hidden">
+      <div class="title-inner">
+        <h1 class="smaller">PAUSED</h1>
+        <div class="press">
+          Press <kbd>P</kbd> to resume · <kbd>R</kbd> respawn ·
+          <kbd>Esc</kbd> home
+        </div>
+      </div>
+    </div>
+    <script type="module" src="assets/game.js"></script>
+  </body>
+</html>
