@@ -33,7 +33,7 @@ const ChaseCamera = class {
   }
   // Touchdown: a soft downward dip that recovers, plus shake only for hard hits.
   land(e) {
-    (this.dipVel -= Math.min(e, 14) * 0.3), this.addShake(clamp((e - 6) / 16, 0, 0.5));
+    (this.dipVel -= Math.min(e, 16) * 0.36), this.addShake(clamp((e - 6) / 16, 0, 0.5));
   }
   update(e, t, n, r = `ride`) {
     let i = this.camera,

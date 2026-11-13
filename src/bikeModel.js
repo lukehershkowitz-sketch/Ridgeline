@@ -22,6 +22,7 @@ import {
   Vector3,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { CONFIG } from './config.js';
 import { clamp, smoothstep, springStep } from './noise.js';
 
 const v3 = (e, t, n) => new Vector3(e, t, n);
@@ -561,7 +562,7 @@ const BikeRig = class {
       ((this.crashVel = t.vel.clone()),
       this.crashSpin.set((Math.random() - 0.3) * 8, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 9)),
       (this.crashT += e),
-      (this.crashVel.y -= 9.81 * e),
+      (this.crashVel.y -= CONFIG.gravity * e),
       r.position.addScaledVector(this.crashVel, e);
     let i = n.groundAt(r.position.x, r.position.z);
     r.position.y < i &&

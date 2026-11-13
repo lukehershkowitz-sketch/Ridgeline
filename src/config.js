@@ -16,7 +16,8 @@ const CONFIG = {
   minPixelRatio: 0.6,
   shadowMapSize: 2048,
   shadowExtent: 70,
-  gravity: 9.81,
+  // Above real-world 9.81 on purpose: less hang time, harder landings.
+  gravity: 12.3,
   physicsHz: 120,
 };
 

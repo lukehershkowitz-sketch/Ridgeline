@@ -11,10 +11,21 @@ const PHYS_UP = new Vector3(0, 1, 0);
 
 const AIR_DRAG = 0.0042;
 
-const MAX_PEDAL_SPEED = 15.5;
+const MAX_PEDAL_SPEED = 17.5;
 
 // Suspension spring (omega = 14 rad/s, damping ratio 0.6). The landing kick is
 // scaled so peak compression matches the old instant value.
+// Handling weight: lower values make the bike slower to respond.
+const PEDAL_ACCEL = 6.4;
+
+const STEER_RESPONSE = 5.5;
+
+const BRAKE_DECEL = 7.5;
+
+const AIR_YAW_RATE = 1;
+
+const AIR_PITCH_RATE = 1.8;
+
 const SUSP_STIFFNESS = 196;
 
 const SUSP_DAMPING = 16.8;
@@ -149,7 +160,7 @@ const BikePhysics = class {
   }
   _stepGround(e, t) {
     let n = this._info;
-    this.steer += (t.steer - this.steer) * Math.min(1, e * 7);
+    this.steer += (t.steer - this.steer) * Math.min(1, e * STEER_RESPONSE);
     let r = this.fwdSpeed,
       i = clamp(2.5 / (1 + Math.abs(r) * 0.085), 0.55, 2.5) * smoothstep(0, 1.8, Math.abs(r));
     (this.yawRate = this.steer * i * Math.sign(r || 1)),
@@ -160,12 +171,12 @@ const BikePhysics = class {
       o = this.vel.dot(_physB),
       s = -GRAVITY * this.forward.y;
     (this.pedalling = t.throttle && a < MAX_PEDAL_SPEED),
-      this.pedalling && (s += 5.2 * (1 - Math.max(0, a) / MAX_PEDAL_SPEED) + (a < 3 ? 2 : 0)),
+      this.pedalling && (s += PEDAL_ACCEL * (1 - Math.max(0, a) / MAX_PEDAL_SPEED) + (a < 3 ? 2 : 0)),
       (this.braking = !1);
     let c = (0.06 + -0.048 * this.onTrail) * GRAVITY;
     this.onRamp && (c = 0.01 * GRAVITY),
       t.brake &&
-        (a > 0.4 ? ((c += 8.5 * (0.6 + 0.4 * this.onTrail)), (this.braking = !0)) : a > -2.5 && (s -= 2.6)),
+        (a > 0.4 ? ((c += BRAKE_DECEL * (0.6 + 0.4 * this.onTrail)), (this.braking = !0)) : a > -2.5 && (s -= 2.6)),
       (s -= AIR_DRAG * a * Math.abs(a));
     let l = a;
     a += s * e;
@@ -249,13 +260,13 @@ const BikePhysics = class {
       ((n.y -= GRAVITY * e), n.addScaledVector(n, -0.0042 * n.length() * e), (this.airTime += e), !t.spinning)
     ) {
       let r = Math.atan2(n.x, n.z);
-      this.yaw += t.steer * 1.3 * e;
+      this.yaw += t.steer * AIR_YAW_RATE * e;
       let i = wrapAngle(this.yaw - r);
       Math.abs(i) > 0.5 && (this.yaw = r + Math.sign(i) * 0.5);
     }
     (this.steer += (0 - this.steer) * Math.min(1, e * 3)),
       (this.lean += (t.spinning ? 0 : -t.steer * 0.25 - this.lean) * Math.min(1, e * 4)),
-      (this.airPitchInput = clamp(this.airPitchInput + (t.airPitch || 0) * 2.2 * e, -1, 1));
+      (this.airPitchInput = clamp(this.airPitchInput + (t.airPitch || 0) * AIR_PITCH_RATE * e, -1, 1));
     let r = Math.hypot(n.x, n.z),
       i = Math.atan2(n.y, Math.max(r, 0.1)) * 0.6 + this.airPitchInput;
     if (
@@ -284,7 +295,7 @@ const BikePhysics = class {
     (this.grounded = !0),
       this.vel.addScaledVector(this.normal, -this.vel.dot(this.normal)),
       this.vel.multiplyScalar(1 - Math.min(0.25, Math.max(0, e - 3) * 0.02)),
-      (this.compVel += Math.min(1, e * 0.11) * SUSP_LANDING_KICK),
+      (this.compVel += Math.min(1, e * 0.13) * SUSP_LANDING_KICK),
       (this.pitch = Math.asin(clamp(this.forward.y, -1, 1))),
       (this.airPitchInput = 0),
       (this.fwdSpeed = this.vel.dot(this.forward));

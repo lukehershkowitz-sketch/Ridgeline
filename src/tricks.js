@@ -1,4 +1,5 @@
 // Trick detection, combos and scoring.
+import { CONFIG } from './config.js';
 import { springStep } from './noise.js';
 
 const TAU = Math.PI * 2;
@@ -224,18 +225,16 @@ const TrickSystem = class {
     let i = t.mod;
     t.steer !== this.steerLatch && (this.steerLatch = 0);
     let a = TAU / 0.68,
-      o = n > 0 || r > 0 ? (r + Math.sqrt(Math.max(0, r * r + 19.62 * Math.max(0, n)))) / 9.81 : 0;
+      o = n > 0 || r > 0 ? (r + Math.sqrt(Math.max(0, r * r + 2 * CONFIG.gravity * Math.max(0, n)))) / CONFIG.gravity : 0;
     if (
       (t.steer === 0 && (this.spinDone = !1),
       t.steer !== 0 && !this.spinDone && (i || this.steerLatch === 0) && !(this.spinVel === 0 && o < 0.35))
     ) {
       let e = Math.sign(t.steer);
       if (this.spinVel === 0 || e !== this.spinDir || this.spinHeld) {
-        (this.spinDir = e), (this.spinVel = e * a), (this.spinHeld = !0);
-        let t = Math.PI,
-          n = (e > 0 ? Math.ceil(this.spin / t + 0.001) : Math.floor(this.spin / t - 0.001)) * t,
-          r = Math.abs(n - this.spin) / a;
-        this.spinTarget = r + t / a + 0.15 > o ? n : null;
+        // The spin runs for as long as the key is held, right down to the
+        // ground. Letting go is what stops it (at the nearest half turn).
+        (this.spinDir = e), (this.spinVel = e * a), (this.spinHeld = !0), (this.spinTarget = null);
       }
     } else if (
       this.spinVel !== 0 &&
@@ -346,7 +345,10 @@ const TrickSystem = class {
   }
   judgeLanding(e) {
     this.spinVel !== 0 &&
-      this.spinTarget !== null &&
+      this.spinTarget === null &&
+      (this.spinTarget =
+        (this.spinDir > 0 ? Math.ceil(this.spin / Math.PI) : Math.floor(this.spin / Math.PI)) * Math.PI);
+    this.spinVel !== 0 &&
       Math.abs(this.spinTarget - this.spin) < 0.9 &&
       ((this.spin = this.spinTarget),
       (this.spinVel = 0),
